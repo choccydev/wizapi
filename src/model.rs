@@ -2,11 +2,15 @@ use super::wiz_errors::{
     DeviceColorTempParseError, DeviceTypeParseError, SceneIDError, SceneNameError,
 };
 use anyhow::Error;
+use bytemuck::{cast, try_cast};
+use http::Uri;
 use lazy_static::lazy_static;
+use macaddr::MacAddr6;
 use num::FromPrimitive;
 use num_derive::{FromPrimitive, ToPrimitive};
 use optional_struct::OptionalStruct;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 lazy_static! {
     static ref SCENES: HashMap<&'static str, u32> = HashMap::from([
@@ -53,16 +57,27 @@ lazy_static! {
         socket: "SOCKET"
     };
     static ref KNOWN_TYPE_IDS: Vec<DeviceType> = vec![DeviceType::BulbDW];
+    static ref WIZMOTE_BUTTON_MAP: HashMap<&'static str, &'static str> = HashMap::from([
+        ("wfa1", "on"),
+        ("wfa2", "off"),
+        ("wfa3", "night"),
+        ("wfa8", "decrease_brightness"),
+        ("wfa9", "increase_brightness"),
+        ("wfa16", "1"),
+        ("wfa17", "2"),
+        ("wfa18", "3"),
+        ("wfa19", "4"),
+    ]);
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct DeviceOptions {
-    rgb: &'static str,
-    dimmable_white: &'static str,
-    tunable_white: &'static str,
-    dual_head: &'static str,
-    single_head: &'static str,
-    socket: &'static str,
+    pub rgb: &'static str,
+    pub dimmable_white: &'static str,
+    pub tunable_white: &'static str,
+    pub dual_head: &'static str,
+    pub single_head: &'static str,
+    pub socket: &'static str,
 }
 
 #[derive(FromPrimitive, ToPrimitive, Debug, Clone, Copy)]
@@ -149,6 +164,134 @@ pub struct ColorTempSpace {
     pub max_temp: u16,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ColorTemp {
+    value: u16,
+    space: ColorTempSpace,
+}
+
+impl ColorTemp {
+    pub fn new(value: u16, space: ColorTempSpace) -> Self {
+        ColorTemp {
+            value: value.clamp(space.min_temp, space.max_temp),
+            space: space,
+        }
+    }
+    pub fn delta(mut self: Self, delta: i32) {
+        self.value = cast::<i32, u16>(
+            (cast::<u16, i32>(self.value) + delta)
+                .clamp(self.space.min_temp.into(), self.space.max_temp.into()),
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WhiteStaticType {
+    Warm,
+    Cold,
+    Mixed,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WhiteVariableType {
+    current: WhiteStaticType,
+    ratio: f32,
+    intensity: Intensity,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WhiteTunableType {
+    temp: ColorTemp,
+    intensity: Intensity,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WhiteType {
+    Tunable(WhiteTunableType),
+    Dimmable(WhiteStaticType),
+    Variable(WhiteVariableType),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Intensity {
+    raw_value: u8,
+    percentage: u8,
+}
+
+impl Intensity {
+    pub fn from_raw(value: u8) -> Self {
+        Intensity {
+            raw_value: value,
+            percentage: Intensity::u8_to_p100(value),
+        }
+    }
+    pub fn from_percent(value: u8) -> Self {
+        Intensity {
+            percentage: value,
+            raw_value: Intensity::p100_to_u8(value),
+        }
+    }
+    pub fn delta_raw(mut self: Self, delta: i16) {
+        self.raw_value = cast::<i16, u8>((cast::<u8, i16>(self.raw_value) + delta).clamp(0, 255));
+        self.update_p100();
+    }
+    pub fn delta_percent(mut self: Self, delta: i16) {
+        self.percentage = cast::<i16, u8>((cast::<u8, i16>(self.percentage) + delta).clamp(0, 100));
+        self.update_u8();
+    }
+    fn update_u8(mut self: Self) {
+        self.raw_value = Intensity::p100_to_u8(self.percentage);
+    }
+    fn update_p100(mut self: Self) {
+        self.percentage = Intensity::u8_to_p100(self.raw_value);
+    }
+    fn p100_to_u8(percent: u8) -> u8 {
+        return cast::<f64, u8>((cast::<u8, f64>(percent.clamp(0, 100)) * 2.55).floor());
+    }
+    fn u8_to_p100(raw: u8) -> u8 {
+        return cast::<f64, u8>((cast::<u8, f64>(raw.clamp(0, 255)) / 2.55).floor());
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Rgb {
+    red: Intensity,
+    green: Intensity,
+    blue: Intensity,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Rgbw {
+    red: Intensity,
+    green: Intensity,
+    blue: Intensity,
+    white: WhiteVariableType,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Rgbww {
+    red: Intensity,
+    green: Intensity,
+    blue: Intensity,
+    white_cold: WhiteVariableType,
+    white_hot: WhiteVariableType,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ColorType {
+    Rgb(Rgb),
+    Rgbw(Rgbw),
+    Rgbww(Rgbww),
+    White(WhiteType),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DeviceState {
+    Enabled,
+    Disabled,
+    Unknown,
+}
+
 #[derive(Debug, Clone, Copy, OptionalStruct)]
 #[optional_derive(Debug, Clone, Copy)]
 pub struct DeviceFeatures {
@@ -170,10 +313,25 @@ pub struct DeviceDescriptor {
     pub type_id_index: Option<usize>,
 }
 
+#[derive(Debug, Clone, OptionalStruct)]
+#[optional_derive(Debug, Clone)]
+pub struct DeviceConfig {
+    pub address: Option<Uri>,
+    pub mac: Option<MacAddr6>,
+    pub name: Option<String>,
+    pub id: Option<Uuid>,
+    pub state: DeviceState,
+    pub speed: Option<u32>,
+    pub scene: Option<Scenes>,
+    pub total_intensity: Option<Intensity>,
+    pub color_data: Option<ColorType>,
+}
+
 #[derive(Debug, Clone)]
 pub struct DeviceDefinition {
     pub features: DeviceFeatures,
     pub descriptor: DeviceDescriptor,
+    pub config: DeviceConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,6 +360,7 @@ impl Device {
         device_type: DeviceType,
         features: Option<DeviceFeatures>,
         descriptor: Option<DeviceDescriptor>,
+        config: Option<DeviceConfig>,
     ) -> Self {
         match device_type {
             DeviceType::BulbTW => Device::Bulb(Bulb::TunableWhite(DeviceDefinition {
@@ -226,6 +385,30 @@ impl Device {
                         white_to_color_ratio: None,
                         firmware_version: None,
                         type_id_index: None,
+                    }
+                },
+                config: if let Some(config) = config {
+                    config
+                } else {
+                    DeviceConfig {
+                        address: None,
+                        mac: None,
+                        name: None,
+                        id: Some(Uuid::new_v4()),
+                        state: DeviceState::Disabled,
+                        speed: None,
+                        scene: None,
+                        total_intensity: Some(Intensity::from_percent(0)),
+                        color_data: Some(ColorType::White(WhiteType::Tunable(WhiteTunableType {
+                            temp: ColorTemp::new(
+                                5000,
+                                ColorTempSpace {
+                                    min_temp: 1500,
+                                    max_temp: 8000,
+                                },
+                            ),
+                            intensity: Intensity::from_percent(0),
+                        }))),
                     }
                 },
             })),
@@ -253,6 +436,27 @@ impl Device {
                         type_id_index: None,
                     }
                 },
+                config: if let Some(config) = config {
+                    config
+                } else {
+                    DeviceConfig {
+                        address: None,
+                        mac: None,
+                        name: None,
+                        id: Some(Uuid::new_v4()),
+                        state: DeviceState::Disabled,
+                        speed: None,
+                        scene: None,
+                        total_intensity: Some(Intensity::from_percent(0)),
+                        color_data: Some(ColorType::White(WhiteType::Variable(
+                            WhiteVariableType {
+                                current: WhiteStaticType::Mixed,
+                                ratio: 0.5,
+                                intensity: Intensity::from_percent(0),
+                            },
+                        ))),
+                    }
+                },
             })),
             DeviceType::BulbRGB => Device::Bulb(Bulb::Rgb(DeviceDefinition {
                 features: if let Some(features) = features {
@@ -276,6 +480,25 @@ impl Device {
                         white_to_color_ratio: None,
                         firmware_version: None,
                         type_id_index: None,
+                    }
+                },
+                config: if let Some(config) = config {
+                    config
+                } else {
+                    DeviceConfig {
+                        address: None,
+                        mac: None,
+                        name: None,
+                        id: Some(Uuid::new_v4()),
+                        state: DeviceState::Disabled,
+                        speed: None,
+                        scene: None,
+                        total_intensity: Some(Intensity::from_percent(0)),
+                        color_data: Some(ColorType::Rgb(Rgb {
+                            red: Intensity::from_percent(0),
+                            green: Intensity::from_percent(0),
+                            blue: Intensity::from_percent(0),
+                        })),
                     }
                 },
             })),
@@ -303,12 +526,27 @@ impl Device {
                         type_id_index: None,
                     }
                 },
+                config: if let Some(config) = config {
+                    config
+                } else {
+                    DeviceConfig {
+                        address: None,
+                        mac: None,
+                        name: None,
+                        id: Some(Uuid::new_v4()),
+                        state: DeviceState::Disabled,
+                        speed: None,
+                        scene: None,
+                        total_intensity: None,
+                        color_data: None,
+                    }
+                },
             }),
         }
     }
 
     pub fn from_descriptor(descriptor: DeviceDescriptor) -> Result<Self, Error> {
-        let mut device: Device = Device::new(DeviceType::BulbDW, None, None);
+        let mut device: Device = Device::new(DeviceType::BulbDW, None, None, None);
         let descriptor_bind = descriptor.clone();
 
         if let Some(name) = descriptor.module_name {
@@ -323,11 +561,11 @@ impl Device {
                 .clone();
 
             if identifier.contains(DEVICE_OPTS.rgb) {
-                device = Device::new(DeviceType::BulbRGB, None, None);
+                device = Device::new(DeviceType::BulbRGB, None, None, None);
             } else if identifier.contains(DEVICE_OPTS.tunable_white) {
-                device = Device::new(DeviceType::BulbTW, None, None);
+                device = Device::new(DeviceType::BulbTW, None, None, None);
             } else if identifier.contains(DEVICE_OPTS.socket) {
-                device = Device::new(DeviceType::Socket, None, None);
+                device = Device::new(DeviceType::Socket, None, None, None);
             } else {
                 let effects = identifier.contains(DEVICE_OPTS.dual_head)
                     || identifier.contains(DEVICE_OPTS.single_head);
@@ -349,7 +587,7 @@ impl Device {
                     details: "Failed finding a known type ID in the descriptor".to_string(),
                 }))?
                 .clone();
-            device = Device::new(device_type, None, None);
+            device = Device::new(device_type, None, None, None);
             let patch = OptionalDeviceFeatures {
                 hue: None,
                 color_temp: None,
@@ -392,6 +630,7 @@ impl Device {
             device_type,
             Some(definition.features),
             Some(definition.descriptor),
+            Some(definition.config),
         )
     }
 
@@ -404,6 +643,20 @@ impl Device {
             device_type,
             Some(definition.features),
             Some(definition.descriptor),
+            Some(definition.config),
+        )
+    }
+
+    pub fn patch_config(self: Self, config: OptionalDeviceConfig) -> Self {
+        let mut definition = self.get_definition();
+        let device_type = self.get_type();
+        definition.config.apply_options(config);
+
+        Device::new(
+            device_type,
+            Some(definition.features),
+            Some(definition.descriptor),
+            Some(definition.config),
         )
     }
 
@@ -427,5 +680,49 @@ impl Device {
                 Bulb::Rgb(_) => DeviceType::BulbRGB,
             },
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum GroupType {
+    Group,
+    Room,
+    House,
+}
+#[derive(Debug, Clone)]
+pub struct DeviceGroup {
+    devices: Vec<Device>,
+    name: String,
+    id: Uuid,
+    group_type: GroupType,
+}
+
+impl DeviceGroup {
+    pub fn new(
+        name: String,
+        group_type: GroupType,
+        devices: Option<Vec<Device>>,
+        id: Option<Uuid>,
+    ) -> Self {
+        let mut devices_holder: Vec<Device>;
+        let mut id_holder: Uuid;
+        if let Some(devices) = devices {
+            devices_holder = devices;
+        } else {
+            devices_holder = Vec::new();
+        }
+
+        if let Some(id) = id {
+            id_holder = id;
+        } else {
+            id_holder = Uuid::new_v4();
+        }
+
+        return DeviceGroup {
+            devices: devices_holder,
+            name: name,
+            id: id_holder,
+            group_type: group_type,
+        };
     }
 }
