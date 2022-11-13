@@ -3,6 +3,7 @@ use super::wiz_errors::{
 };
 use anyhow::Error;
 use bytemuck::{cast, try_cast};
+use chrono::Duration;
 use http::Uri;
 use lazy_static::lazy_static;
 use macaddr::MacAddr6;
@@ -68,6 +69,16 @@ lazy_static! {
         ("wfa18", "3"),
         ("wfa19", "4"),
     ]);
+    static ref RESPONSE_PORT: u16 = 38899;
+    static ref LISTENING_PORT: u16 = 38900;
+    static ref DEFAULT_NETWORK_CONFIG: NetworkConfig = NetworkConfig {
+        timeout: Duration::seconds(13),
+        max_sent_datagrams: 6,
+        first_send_interval: Duration::milliseconds(750),
+        max_backoff: 3,
+        keepalive: Duration::milliseconds(20),
+        port: *RESPONSE_PORT,
+    };
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -926,6 +937,16 @@ impl Device {
 }
 
 #[derive(Debug, Clone)]
+pub struct NetworkConfig {
+    timeout: Duration,
+    max_sent_datagrams: u8,
+    first_send_interval: Duration,
+    max_backoff: u8,
+    keepalive: Duration,
+    port: u16,
+}
+
+#[derive(Debug, Clone)]
 pub enum GroupType {
     Group,
     Room,
@@ -937,6 +958,7 @@ pub struct DeviceGroup {
     pub name: String,
     pub id: Uuid,
     pub group_type: GroupType,
+    pub network_config: NetworkConfig,
 }
 
 impl DeviceGroup {
@@ -945,9 +967,10 @@ impl DeviceGroup {
         group_type: GroupType,
         devices: Option<Vec<Device>>,
         id: Option<Uuid>,
+        network_config: Option<NetworkConfig>,
     ) -> Self {
-        let mut devices_holder: Vec<Device>;
-        let mut id_holder: Uuid;
+        let devices_holder: Vec<Device>;
+        let id_holder: Uuid;
         if let Some(devices) = devices {
             devices_holder = devices;
         } else {
@@ -965,6 +988,18 @@ impl DeviceGroup {
             name: name,
             id: id_holder,
             group_type: group_type,
+            network_config: if let Some(network_config) = network_config {
+                network_config
+            } else {
+                NetworkConfig {
+                    timeout: DEFAULT_NETWORK_CONFIG.timeout,
+                    max_sent_datagrams: DEFAULT_NETWORK_CONFIG.max_sent_datagrams,
+                    first_send_interval: DEFAULT_NETWORK_CONFIG.first_send_interval,
+                    max_backoff: DEFAULT_NETWORK_CONFIG.max_backoff,
+                    keepalive: DEFAULT_NETWORK_CONFIG.keepalive,
+                    port: DEFAULT_NETWORK_CONFIG.port,
+                }
+            },
         };
     }
 }
