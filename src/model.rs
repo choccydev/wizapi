@@ -166,8 +166,8 @@ pub struct ColorTempSpace {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ColorTemp {
-    value: u16,
-    space: ColorTempSpace,
+    pub value: u16,
+    pub space: ColorTempSpace,
 }
 
 impl ColorTemp {
@@ -186,36 +186,9 @@ impl ColorTemp {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum WhiteStaticType {
-    Warm,
-    Cold,
-    Mixed,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WhiteVariableType {
-    current: WhiteStaticType,
-    ratio: f32,
-    intensity: Intensity,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WhiteTunableType {
-    temp: ColorTemp,
-    intensity: Intensity,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum WhiteType {
-    Tunable(WhiteTunableType),
-    Dimmable(WhiteStaticType),
-    Variable(WhiteVariableType),
-}
-
-#[derive(Debug, Clone, Copy)]
 pub struct Intensity {
-    raw_value: u8,
-    percentage: u8,
+    pub raw_value: u8,
+    pub percentage: u8,
 }
 
 impl Intensity {
@@ -254,27 +227,296 @@ impl Intensity {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum WhiteStaticType {
+    Warm,
+    Cold,
+    Mixed,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WhiteVariableType {
+    pub current: WhiteStaticType,
+    pub ratio: f32,
+    pub intensity: Intensity,
+}
+
+impl WhiteVariableType {
+    pub fn new() -> Self {
+        Self {
+            current: WhiteStaticType::Mixed,
+            ratio: 0.0,
+            intensity: Intensity::from_percent(0),
+        }
+    }
+    pub fn delta_percent(mut self: Self, delta: i16) {
+        self.intensity.delta_percent(delta);
+    }
+    pub fn delta_raw(mut self: Self, delta: i16) {
+        self.intensity.delta_raw(delta);
+    }
+
+    pub fn patch_percent(mut self: Self, value: u8) {
+        self.intensity = Intensity::from_percent(value);
+    }
+
+    pub fn patch_raw(mut self: Self, value: u8) {
+        self.intensity = Intensity::from_raw(value);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WhiteTunableType {
+    pub temp: ColorTemp,
+    pub intensity: Intensity,
+}
+
+impl WhiteTunableType {
+    pub fn new(space: ColorTempSpace) -> Self {
+        Self {
+            temp: ColorTemp::new(5000, space),
+            intensity: Intensity::from_percent(0),
+        }
+    }
+    pub fn delta_percent(mut self: Self, delta: i16) {
+        self.intensity.delta_percent(delta);
+    }
+    pub fn delta_raw(mut self: Self, delta: i16) {
+        self.intensity.delta_raw(delta);
+    }
+
+    pub fn patch_percent(mut self: Self, value: u8) {
+        self.intensity = Intensity::from_percent(value);
+    }
+
+    pub fn patch_raw(mut self: Self, value: u8) {
+        self.intensity = Intensity::from_raw(value);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WhiteType {
+    Tunable(WhiteTunableType),
+    Dimmable(WhiteStaticType),
+    Variable(WhiteVariableType),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ColorChannel {
+    Red,
+    Green,
+    Blue,
+    WhiteCold,
+    WhiteHot,
+}
+
+#[derive(Debug, Clone, Copy, OptionalStruct)]
+#[optional_derive(Debug, Clone, Copy)]
 pub struct Rgb {
-    red: Intensity,
-    green: Intensity,
-    blue: Intensity,
+    pub red: Intensity,
+    pub green: Intensity,
+    pub blue: Intensity,
+}
+
+impl Rgb {
+    pub fn new_from_percent(r: u8, g: u8, b: u8) -> Self {
+        Self {
+            red: Intensity::from_percent(r),
+            green: Intensity::from_percent(g),
+            blue: Intensity::from_percent(b),
+        }
+    }
+    pub fn new_from_raw(r: u8, g: u8, b: u8) -> Self {
+        Self {
+            red: Intensity::from_raw(r),
+            green: Intensity::from_raw(g),
+            blue: Intensity::from_raw(b),
+        }
+    }
+    pub fn patch_delta_percent(mut self: Self, channel: ColorChannel, delta: i16) {
+        match channel {
+            ColorChannel::Red => self.red.delta_percent(delta),
+            ColorChannel::Green => self.green.delta_percent(delta),
+            ColorChannel::Blue => self.blue.delta_percent(delta),
+            _ => {}
+        }
+    }
+    pub fn patch_delta_raw(mut self: Self, channel: ColorChannel, delta: i16) {
+        match channel {
+            ColorChannel::Red => self.red.delta_raw(delta),
+            ColorChannel::Green => self.green.delta_raw(delta),
+            ColorChannel::Blue => self.blue.delta_raw(delta),
+            _ => {}
+        }
+    }
+    pub fn patch_value_percent(mut self: Self, channel: ColorChannel, value: u8) {
+        match channel {
+            ColorChannel::Red => self.red = Intensity::from_percent(value),
+            ColorChannel::Green => self.green = Intensity::from_percent(value),
+            ColorChannel::Blue => self.blue = Intensity::from_percent(value),
+            _ => {}
+        }
+    }
+    pub fn patch_value_raw(mut self: Self, channel: ColorChannel, value: u8) {
+        match channel {
+            ColorChannel::Red => self.red = Intensity::from_raw(value),
+            ColorChannel::Green => self.green = Intensity::from_raw(value),
+            ColorChannel::Blue => self.blue = Intensity::from_raw(value),
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rgbw {
-    red: Intensity,
-    green: Intensity,
-    blue: Intensity,
-    white: WhiteVariableType,
+    pub red: Intensity,
+    pub green: Intensity,
+    pub blue: Intensity,
+    pub white: WhiteVariableType,
+}
+
+impl Rgbw {
+    pub fn new_from_percent(r: u8, g: u8, b: u8, w: u8) -> Self {
+        Self {
+            red: Intensity::from_percent(r),
+            green: Intensity::from_percent(g),
+            blue: Intensity::from_percent(b),
+            white: WhiteVariableType {
+                current: WhiteStaticType::Mixed,
+                ratio: 0.0,
+                intensity: Intensity::from_percent(w),
+            },
+        }
+    }
+    pub fn new_from_raw(r: u8, g: u8, b: u8, w: u8) -> Self {
+        Self {
+            red: Intensity::from_raw(r),
+            green: Intensity::from_raw(g),
+            blue: Intensity::from_raw(b),
+            white: WhiteVariableType {
+                current: WhiteStaticType::Mixed,
+                ratio: 0.0,
+                intensity: Intensity::from_raw(w),
+            },
+        }
+    }
+    pub fn patch_delta_percent(mut self: Self, channel: ColorChannel, delta: i16) {
+        match channel {
+            ColorChannel::Red => self.red.delta_percent(delta),
+            ColorChannel::Green => self.green.delta_percent(delta),
+            ColorChannel::Blue => self.blue.delta_percent(delta),
+            ColorChannel::WhiteCold => self.white.delta_percent(delta),
+            _ => {}
+        }
+    }
+    pub fn patch_delta_raw(mut self: Self, channel: ColorChannel, delta: i16) {
+        match channel {
+            ColorChannel::Red => self.red.delta_raw(delta),
+            ColorChannel::Green => self.green.delta_raw(delta),
+            ColorChannel::Blue => self.blue.delta_raw(delta),
+            ColorChannel::WhiteCold => self.white.delta_raw(delta),
+            _ => {}
+        }
+    }
+    pub fn patch_value_percent(mut self: Self, channel: ColorChannel, value: u8) {
+        match channel {
+            ColorChannel::Red => self.red = Intensity::from_percent(value),
+            ColorChannel::Green => self.green = Intensity::from_percent(value),
+            ColorChannel::Blue => self.blue = Intensity::from_percent(value),
+            ColorChannel::WhiteCold => self.white.patch_percent(value),
+            _ => {}
+        }
+    }
+    pub fn patch_value_raw(mut self: Self, channel: ColorChannel, value: u8) {
+        match channel {
+            ColorChannel::Red => self.red = Intensity::from_raw(value),
+            ColorChannel::Green => self.green = Intensity::from_raw(value),
+            ColorChannel::Blue => self.blue = Intensity::from_raw(value),
+            ColorChannel::WhiteCold => self.white.patch_raw(value),
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Rgbww {
-    red: Intensity,
-    green: Intensity,
-    blue: Intensity,
-    white_cold: WhiteVariableType,
-    white_hot: WhiteVariableType,
+    pub red: Intensity,
+    pub green: Intensity,
+    pub blue: Intensity,
+    pub white_cold: WhiteVariableType,
+    pub white_hot: WhiteVariableType,
+}
+
+impl Rgbww {
+    pub fn new_from_percent(r: u8, g: u8, b: u8, wc: u8, wh: u8) -> Self {
+        Self {
+            red: Intensity::from_percent(r),
+            green: Intensity::from_percent(g),
+            blue: Intensity::from_percent(b),
+            white_cold: WhiteVariableType {
+                current: WhiteStaticType::Mixed,
+                ratio: 0.0,
+                intensity: Intensity::from_percent(wc),
+            },
+            white_hot: WhiteVariableType {
+                current: WhiteStaticType::Mixed,
+                ratio: 0.0,
+                intensity: Intensity::from_percent(wh),
+            },
+        }
+    }
+    pub fn new_from_raw(r: u8, g: u8, b: u8, wc: u8, wh: u8) -> Self {
+        Self {
+            red: Intensity::from_raw(r),
+            green: Intensity::from_raw(g),
+            blue: Intensity::from_raw(b),
+            white_cold: WhiteVariableType {
+                current: WhiteStaticType::Mixed,
+                ratio: 0.0,
+                intensity: Intensity::from_raw(wc),
+            },
+            white_hot: WhiteVariableType {
+                current: WhiteStaticType::Mixed,
+                ratio: 0.0,
+                intensity: Intensity::from_percent(wh),
+            },
+        }
+    }
+    pub fn patch_delta_percent(mut self: Self, channel: ColorChannel, delta: i16) {
+        match channel {
+            ColorChannel::Red => self.red.delta_percent(delta),
+            ColorChannel::Green => self.green.delta_percent(delta),
+            ColorChannel::Blue => self.blue.delta_percent(delta),
+            ColorChannel::WhiteCold => self.white_cold.delta_percent(delta),
+            ColorChannel::WhiteHot => self.white_hot.delta_percent(delta),
+        }
+    }
+    pub fn patch_delta_raw(mut self: Self, channel: ColorChannel, delta: i16) {
+        match channel {
+            ColorChannel::Red => self.red.delta_raw(delta),
+            ColorChannel::Green => self.green.delta_raw(delta),
+            ColorChannel::Blue => self.blue.delta_raw(delta),
+            ColorChannel::WhiteCold => self.white_cold.delta_raw(delta),
+            ColorChannel::WhiteHot => self.white_hot.delta_raw(delta),
+        }
+    }
+    pub fn patch_value_percent(mut self: Self, channel: ColorChannel, value: u8) {
+        match channel {
+            ColorChannel::Red => self.red = Intensity::from_percent(value),
+            ColorChannel::Green => self.green = Intensity::from_percent(value),
+            ColorChannel::Blue => self.blue = Intensity::from_percent(value),
+            ColorChannel::WhiteCold => self.white_cold.patch_percent(value),
+            ColorChannel::WhiteHot => self.white_hot.patch_percent(value),
+        }
+    }
+    pub fn patch_value_raw(mut self: Self, channel: ColorChannel, value: u8) {
+        match channel {
+            ColorChannel::Red => self.red = Intensity::from_raw(value),
+            ColorChannel::Green => self.green = Intensity::from_raw(value),
+            ColorChannel::Blue => self.blue = Intensity::from_raw(value),
+            ColorChannel::WhiteCold => self.white_cold.patch_raw(value),
+            ColorChannel::WhiteHot => self.white_hot.patch_raw(value),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -691,10 +933,10 @@ pub enum GroupType {
 }
 #[derive(Debug, Clone)]
 pub struct DeviceGroup {
-    devices: Vec<Device>,
-    name: String,
-    id: Uuid,
-    group_type: GroupType,
+    pub devices: Vec<Device>,
+    pub name: String,
+    pub id: Uuid,
+    pub group_type: GroupType,
 }
 
 impl DeviceGroup {
