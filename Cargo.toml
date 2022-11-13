@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.66"
 bytemuck = "1.12.3"
+chrono = "0.4.23"
 http = "0.2.8"
 lazy_static = "1.4.0"
 macaddr = "1.0.1"
