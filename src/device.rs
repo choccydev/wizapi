@@ -1,9 +1,10 @@
 use super::device_model::{
     Bulb, ColorTemp, ColorTempSpace, ColorType, DeviceConfig, DeviceDefinition, DeviceDescriptor,
-    DeviceFeatures, DeviceState, DeviceType, Intensity, NetworkConfig, OptionalDeviceConfig,
+    DeviceFeatures, DeviceState, DeviceType, Intensity, OptionalDeviceConfig,
     OptionalDeviceDescriptor, OptionalDeviceFeatures, Rgb, WhiteStaticType, WhiteTunableType,
-    WhiteType, WhiteVariableType, DEFAULT_NETWORK_CONFIG, DEVICE_OPTS, KNOWN_TYPE_IDS,
+    WhiteType, WhiteVariableType, DEVICE_OPTS, KNOWN_TYPE_IDS,
 };
+use super::network_model::{NetworkConfig, DEFAULT_NETWORK_CONFIG};
 use super::wiz_errors::{DeviceError, ParseError};
 use uuid::Uuid;
 

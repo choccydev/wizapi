@@ -16,6 +16,16 @@ use std::{any::Any, collections::HashMap};
 use uuid::Uuid;
 
 lazy_static! {
+    pub static ref RESPONSE_PORT: u16 = 38899;
+    pub static ref LISTENING_PORT: u16 = 38900;
+    pub static ref DEFAULT_NETWORK_CONFIG: NetworkConfig = NetworkConfig {
+        timeout: Duration::seconds(13),
+        max_sent_datagrams: 6,
+        first_send_interval: Duration::milliseconds(750),
+        max_backoff: 3,
+        keepalive: Duration::milliseconds(20),
+        port: *RESPONSE_PORT,
+    };
     // TODO add this remaining stuff according to reverse engineering andf the pywiz stuff
    //  pub static ref METHODS: Methods = Methods {
         // update: Method::new("getPilot", false, None, None),
@@ -28,6 +38,16 @@ lazy_static! {
         // reboot: "reboot",
         // reset: "reset"
     // };
+}
+
+#[derive(Debug, Clone)]
+pub struct NetworkConfig {
+    pub timeout: Duration,
+    pub max_sent_datagrams: u8,
+    pub first_send_interval: Duration,
+    pub max_backoff: u8,
+    pub keepalive: Duration,
+    pub port: u16,
 }
 
 pub struct MethodQuery {
