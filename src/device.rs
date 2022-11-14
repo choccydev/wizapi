@@ -1,4 +1,4 @@
-use super::model::{
+use super::device_model::{
     Bulb, ColorTemp, ColorTempSpace, ColorType, DeviceConfig, DeviceDefinition, DeviceDescriptor,
     DeviceFeatures, DeviceState, DeviceType, Intensity, NetworkConfig, OptionalDeviceConfig,
     OptionalDeviceDescriptor, OptionalDeviceFeatures, Rgb, WhiteStaticType, WhiteTunableType,

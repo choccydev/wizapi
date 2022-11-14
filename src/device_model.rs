@@ -1,4 +1,4 @@
-use super::wiz_errors::{DeviceError, SceneError};
+use super::wiz_errors::SceneError;
 use anyhow::Error;
 use bytemuck::{cast, try_cast};
 use chrono::Duration;

@@ -1,4 +1,5 @@
-mod model;
+mod device;
+mod device_model;
 mod wiz_errors;
 
 pub fn add(left: usize, right: usize) -> usize {
