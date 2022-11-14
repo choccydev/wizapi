@@ -1,4 +1,5 @@
-use super::model::DeviceDescriptor;
+use super::device_model::DeviceDescriptor;
+use super::network_model::{Params, ParamsFilter};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,4 +22,13 @@ pub enum ParseError {
     UndefinedType(DeviceDescriptor),
     #[error("Failed to find a expected color temperature space in the given descriptor.\n Descriptor: {0:#?}")]
     ColorTemp(DeviceDescriptor),
+}
+
+#[derive(Error, Debug)]
+pub enum QueryError {
+    #[error("Not all keys required by the method are present on the parameters given.\n Required Parameters: {filter:#?}\n Given parameters: {params:#?}")]
+    FilterError {
+        params: Params,
+        filter: ParamsFilter,
+    },
 }
