@@ -6,19 +6,17 @@ Project Description
 
 ### Todo
 
-- [ ] Write docs and a good model for the wiz methods  
-- [ ] Write docs and model for the public api  
-- [ ] Add public api for extra features (schedules, cycles, etc)  
-- [ ] Get a way to block phone-home  
-- [ ] Define a way to setup or connect locally to the lamp even without setup or registry  
-- [ ] Incorporate sensors into the model  
-- [ ] Decompile firmware to glean as much info as possible  
-- [ ] Write UDP tooling to send, receive, serialize, and deserialize messages  
+- [ ] Define core features
+- [ ] Write a Roadmap
+- [ ] Define how to manage persistent data
+- [ ] Define the basic structure that the API will follow
+- [ ] Define the spec and model
+- [ ] Move to CLI and Server
+- [ ] Bolt on extra features
 
 ### In Progress
 
-- [ ] Dig on copied repos and posts to see if there is something i'm missing  
-
 ### Done ✓
 
-
+- [x] Kill old stuff
+- [x] Make base Wiz-compliant RPC typed networking lib
