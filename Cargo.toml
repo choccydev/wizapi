@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.66"
 lazy_static = "1.4.0"
+tokio = "1.35.1"
 tracing = "0.1.37"
 wizrpc = "0.1.7"
